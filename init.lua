@@ -1,42 +1,3 @@
---[[
-
-=====================================================================
-==================== READ THIS BEFORE CONTINUING ====================
-=====================================================================
-
-Kickstart.nvim is *not* a distribution.
-
-Kickstart.nvim is a template for your own configuration.
-  The goal is that you can read every line of code, top-to-bottom, understand
-  what your configuration is doing, and modify it to suit your needs.
-
-  Once you've done that, you should start exploring, configuring and tinkering to
-  explore Neovim!
-
-  If you don't know anything about Lua, I recommend taking some time to read through
-  a guide. One possible example:
-  - https://learnxinyminutes.com/docs/lua/
-
-
-  And then you can explore or search through `:help lua-guide`
-  - https://neovim.io/doc/user/lua-guide.html
-
-
-Kickstart Guide:
-
-I have left several `:help X` comments throughout the init.lua
-You should run that command and read that help section for more information.
-
-In addition, I have some `NOTE:` items throughout the file.
-These are for you, the reader to help understand what is happening. Feel free to delete
-them once you know what you're doing, but they should serve as a guide for when you
-are first encountering a few different constructs in your nvim config.
-
-I hope you enjoy your Neovim journey,
-- TJ
-
-P.S. You can delete this when you're done too. It's your config now :)
---]]
 -- Set <space> as the leader key
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are required (otherwise wrong leader will be used)
@@ -227,7 +188,7 @@ require('lazy').setup({
   --    Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
   --
   --    For additional information see: https://github.com/folke/lazy.nvim#-structuring-your-plugins
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
 }, {})
 
 -- [[ Setting options ]]
@@ -239,6 +200,10 @@ vim.o.hlsearch = false
 
 -- Make line numbers default
 vim.wo.number = true
+-- Load vim Autogroup to toggle Linenumbers in Normal / Insert Mode
+vim.cmd([[
+  source ~/.config/nvim/vim/linenumber.vim
+]])
 
 -- Enable mouse mode
 vim.o.mouse = 'a'
@@ -271,7 +236,18 @@ vim.o.completeopt = 'menuone,noselect'
 -- NOTE: You should make sure your terminal supports this
 vim.o.termguicolors = true
 
+-- 
+vim.o.cursorline = true
+-- vim.o.winblend = 10
+-- vim.o.background = "dark"
+vim.o.title = true
+
+-- Set the amount of lines that are visible when scrolling to the edges of the editor
+vim.o.scrolloff = 8
+vim.o.tabstop = 2
+
 -- [[ Basic Keymaps ]]
+require('custom.keymaps.editor')
 
 -- Keymaps for better default experience
 -- See `:help vim.keymap.set()`
@@ -298,11 +274,13 @@ require('telescope').setup {
   defaults = {
     mappings = {
       i = {
-        ['<C-u>'] = false,
-        ['<C-d>'] = false,
+        -- ['<C-u>'] = false,
+        -- ['<C-d>'] = false,
+        -- ['<C-l>'] = 'splitright',
       },
     },
   },
+
 }
 
 -- Enable telescope fzf native, if installed
@@ -402,9 +380,10 @@ vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = 'Go to next diagnos
 vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Open floating diagnostic message' })
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostics list' })
 
+
 -- [[ Configure LSP ]]
 --  This function gets run when an LSP connects to a particular buffer.
-local on_attach = function(_, bufnr)
+local on_attach = function(client, bufnr)
   -- NOTE: Remember that lua is a real programming language, and as such it is possible
   -- to define small helper and utility functions so you don't have to repeat yourself
   -- many times.
@@ -419,11 +398,12 @@ local on_attach = function(_, bufnr)
     vim.keymap.set('n', keys, func, { buffer = bufnr, desc = desc })
   end
 
-  nmap('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
+  nmap('<F2>', vim.lsp.buf.rename, 'Rename')
+  nmap('<leader>cr', vim.lsp.buf.rename, '[C]ode [R]ename')
   nmap('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction')
 
   nmap('gd', require('telescope.builtin').lsp_definitions, '[G]oto [D]efinition')
-  nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
+  -- nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
   nmap('gI', require('telescope.builtin').lsp_implementations, '[G]oto [I]mplementation')
   nmap('<leader>D', require('telescope.builtin').lsp_type_definitions, 'Type [D]efinition')
   nmap('<leader>ds', require('telescope.builtin').lsp_document_symbols, '[D]ocument [S]ymbols')
@@ -445,7 +425,33 @@ local on_attach = function(_, bufnr)
   vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
     vim.lsp.buf.format()
   end, { desc = 'Format current buffer with LSP' })
+
+  -- Activate ESLint Formatting for ESLint Projects
+  -- https://github.com/neovim/nvim-lspconfig/blob/master/doc/server_configurations.md#eslint
+  if client.name == 'eslint' then
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      buffer = bufnr,
+      command = "EslintFixAll",
+    })
+  end
 end
+
+local function spread(template)
+    local result = {}
+    for key, value in pairs(template) do
+        result[key] = value
+    end
+
+    return function(table)
+        for key, value in pairs(table) do
+            result[key] = value
+        end
+        return result
+    end
+end
+
+local withMotions = spread(require('which-key.plugins.presets.init').motions)
+
 
 -- document existing key chains
 require('which-key').register {
@@ -453,10 +459,14 @@ require('which-key').register {
   ['<leader>d'] = { name = '[D]ocument', _ = 'which_key_ignore' },
   ['<leader>g'] = { name = '[G]it', _ = 'which_key_ignore' },
   ['<leader>h'] = { name = 'More git', _ = 'which_key_ignore' },
-  ['<leader>r'] = { name = '[R]ename', _ = 'which_key_ignore' },
+  ['<leader>r'] = withMotions {
+    name = '[R]eplace',
+    _ = 'which_key_ignore',
+  },
   ['<leader>s'] = { name = '[S]earch', _ = 'which_key_ignore' },
   ['<leader>w'] = { name = '[W]orkspace', _ = 'which_key_ignore' },
 }
+
 
 -- mason-lspconfig requires that these setup functions are called in this order
 -- before setting up the servers.
@@ -476,7 +486,8 @@ local servers = {
   -- gopls = {},
   -- pyright = {},
   -- rust_analyzer = {},
-  -- tsserver = {},
+  tsserver = { },
+  eslint = { },
   -- html = { filetypes = { 'html', 'twig', 'hbs'} },
 
   lua_ls = {
@@ -520,6 +531,7 @@ require('luasnip.loaders.from_vscode').lazy_load()
 luasnip.config.setup {}
 
 cmp.setup {
+  enabled = true,
   snippet = {
     expand = function(args)
       luasnip.lsp_expand(args.body)
